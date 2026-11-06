@@ -168,6 +168,7 @@
     const ST=S.state||SIM.at(t),GT=ST.t,lights=lightUniforms(GT,ST);
     L.beginBG([.035,.04,.05,1]);texture('arena',0,0,W,H,GT,lights);L.beginComp();
     groundFX(ST);
+    if(ST.boss.attack==='breath'&&ST.boss.state==='active')L.anchor('dragon-breath-floor-light',[ST.boss.x,ST.boss.y],lights.u_fire.slice(0,2),1);
     const sorted=[{y:ST.p.y,draw:()=>player(ST,lights)},{y:ST.boss.y,draw:()=>target(ST)}];
     LEVEL.occluders.forEach(o=>sorted.push({y:o.baseY,draw:()=>texture(o.name,o.x,o.y,ASSETS[o.name].w,ASSETS[o.name].h,GT,lights)}));
     if(!ST.qaNoTorch&&!L.NOFX)LEVEL.torches.forEach(f=>sorted.push({y:f.y+46,draw:()=>flame(f,GT)}));
@@ -203,7 +204,7 @@
     const clawState=(state,age,view=125)=>{const s=dragonState('claw',state,age,view),b=s.boss;s.p.x=b.x+Math.cos(b.aim)*190;s.p.y=b.y+Math.sin(b.aim)*190*SIM.FLOOR_Y;s.p.facing=Math.atan2(b.y-s.p.y,b.x-s.p.x);
       if(state==='active')s.events.push({k:'clawSwing',x:b.x,y:b.y,t:s.t-age,angle:b.aim,range:SIM.BOSS_ATTACKS.claw.range,arc:SIM.BOSS_ATTACKS.claw.arc});return s;};
     const boltShot=(age,view=125)=>{const s=dragonState('bolt','active',0,view),b=s.boss;b.boltFacing=b.facing;const g=SIM.boltGeometry(s),cfg=SIM.BOSS_ATTACKS.bolt;b.boltTarget={x:g.origin.x+Math.cos(b.aim)*400,y:g.origin.y+Math.sin(b.aim)*400*SIM.FLOOR_Y};
-      s.shots.push({id:99,owner:'boss',type:'ashBolt',visual:'obsidian',x:g.origin.x+Math.cos(b.aim)*cfg.speed*age,y:g.origin.y+Math.sin(b.aim)*cfg.speed*age*SIM.FLOOR_Y,vx:Math.cos(b.aim)*cfg.speed,vy:Math.sin(b.aim)*cfg.speed*SIM.FLOOR_Y,r:cfg.radius,ttl:2,age,launchHeight:g.origin.y-g.muzzle[1],dropDistance:250,travelled:cfg.speed*age});b.state='recover';b.stateT=Math.min(.8,age);return s;};
+      s.shots.push({id:99,owner:'boss',type:'ashBolt',visual:'obsidian',x:g.origin.x+Math.cos(b.aim)*cfg.speed*age,y:g.origin.y+Math.sin(b.aim)*cfg.speed*age*SIM.FLOOR_Y,vx:Math.cos(b.aim)*cfg.speed,vy:Math.sin(b.aim)*cfg.speed*SIM.FLOOR_Y,r:cfg.radius,ttl:2,age,launchHeight:g.origin.y-g.muzzle[1],launchOffsetX:g.muzzle[0]-g.origin.x,dropDistance:250,travelled:cfg.speed*age});b.state='recover';b.stateT=Math.min(.8,age);return s;};
     const criticalState=age=>make(s=>{s.t=4;const p=s.p,b=s.boss;p.x=b.x-180;p.y=b.y+110;p.facing=Math.atan2(b.y-p.y,b.x-p.x);
       p.action={kind:'critical',ability:1,aim:p.facing,started:s.t-age,duration:.66,committed:age>=.26};
       if(age>=.26)s.events.push({k:'criticalSwing',x:p.x,y:p.y,angle:p.facing,t:s.t-(age-.26)},{k:'criticalHit',x:b.x,y:b.y,amount:72,t:s.t-(age-.26)});});
@@ -219,9 +220,12 @@
     for(const view of [0,45,90,125,180,225,270,305]){
       bossStates.push(['dragon-hover-'+view,dragonState(null,'idle',0,view)],['dragon-breath-'+view,dragonState('breath','active',.75,view)]);
       bossStates.push(['dragon-claw-'+view,clawState('active',.07,view)],['dragon-bolt-'+view,dragonState('bolt','telegraph',.85,view)]);
+      for(const age of [.1,.45])bossStates.push(['dragon-bolt-floor-'+view+'-'+age,dragonState('bolt','telegraph',age,view)]);
     }
+    for(const view of [45,125])for(let frame=0;frame<6;frame++){const s=dragonState('breath','active',.75,view);s.t=frame*.15+.01;bossStates.push(['dragon-flame-floor-'+view+'-'+frame,s]);}
     const wingOn=Array.from({length:12},(_,i)=>{const s=dragonState(null,'idle',0);s.t=4+i*.075;return s;});
     const flameCycle=Array.from({length:10},(_,i)=>{const s=dragonState('breath','active',.8+i/60);s.t=4+i/60;s.qaDragonFrame=2;return s;});
+    const flamePoses=Array.from({length:6},(_,i)=>{const s=dragonState('breath','active',.75,45);s.t=i*.15+.01;return s;});
     const warningCycle=Array.from({length:8},(_,i)=>{const s=dragonState('slam','telegraph',.45+i*.08);s.t=4+i*.08;s.qaDragonFrame=0;return s;});
     const impactCycle=Array.from({length:10},(_,i)=>{const s=slamImpact(.07+i/60);s.t=4+i/60;s.events[0].t=s.t-(.07+i/60);s.qaDragonFrame=3;return s;});
     const criticalCycle=Array.from({length:8},(_,i)=>criticalState(.27+i/60));
@@ -244,6 +248,7 @@
       anim:{torch:{on:flameOn,off:flameOff,box:[275,270,60,90],min:.02},knightRun:{on:runOn,off:runOff,box:[650,585,160,155],min:.005},
         dragonWings:{on:wingOn,off:wingOn.map(s=>({...s,qaDragonFrame:0})),box:[565,150,550,400],min:.03},
         dragonFlame:{on:flameCycle,off:flameCycle.map(s=>({...s,qaNoBreath:true})),box:[620,350,230,440],min:.02},
+        dragonFlamePoses:{on:flamePoses,off:flamePoses.map(s=>({...s,qaNoBreath:true})),box:[750,320,440,510],min:.02},
         slamCountdown:{on:warningCycle,off:warningCycle.map(s=>({...s,boss:{...s.boss,stateT:.45}})),box:[490,540,690,210],min:.01},
         groundImpact:{on:impactCycle,off:impactCycle.map(s=>({...s,events:[]})),box:[495,500,690,260],min:.02},
         criticalStrike:{on:criticalCycle,off:criticalCycle.map(s=>({...s,events:[]})),box:[400,365,650,380],min:.02},

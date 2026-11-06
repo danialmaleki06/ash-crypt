@@ -315,13 +315,12 @@
   }
   function breathGeometry(S){
     const b=S.boss,pose=breathPose(S),d=pose.data,k=d.scale;
-    // The mouth's authored position projects to the floor below the skull.
-    // The jet drops to that floor, then spreads forward; all damage and marks
-    // use this same origin, rather than the dragon's distant body centre.
-    const headHeight=220,height=headHeight+bossHeight(S)*.8;
-    const origin={x:b.x+(pose.mouth[0]-d.anchor[0])*k,y:b.y+(pose.mouth[1]-d.anchor[1])*k+headHeight};
-    const muzzle=[origin.x,origin.y-height],range=BOSS_ATTACKS.breath.range;
-    const point=q=>[origin.x+Math.cos(b.aim)*range*q,origin.y+Math.sin(b.aim)*range*FLOOR_Y*q-height*(1-q)**4];
+    // Floor hazards belong to the dragon's world anchor, not an animated
+    // screen-space mouth plus an assumed skull height. Keep both anchors:
+    // the floor mark stays under the body; the visible jet leaves the mouth.
+    const origin={x:b.x,y:b.y};
+    const muzzle=[b.x+(pose.mouth[0]-d.anchor[0])*k,b.y+(pose.mouth[1]-d.anchor[1])*k-bossHeight(S)*.8],range=BOSS_ATTACKS.breath.range;
+    const point=q=>[origin.x+Math.cos(b.aim)*range*q+(muzzle[0]-origin.x)*(1-q),origin.y+Math.sin(b.aim)*range*FLOOR_Y*q+(muzzle[1]-origin.y)*(1-q)**4];
     return{origin,muzzle,range,aim:b.aim,arc:BOSS_ATTACKS.breath.arc,view:pose.view,frame:pose.frame,point,end:point(1)};
   }
   function inBreath(S,p=S.p){const g=breathGeometry(S);return inBossCone({...g.origin,aim:g.aim},p,g.range,g.arc);}
@@ -331,16 +330,20 @@
     for(let d=8;d<range;d+=8)if(!isWalkable(S,g.origin.x+Math.cos(aim)*d,g.origin.y+Math.sin(aim)*d*FLOOR_Y,2,true)){range=Math.max(8,d-8);break;}
     return{...g,aim,range,end:[g.origin.x+Math.cos(aim)*range,g.origin.y+Math.sin(aim)*range*FLOOR_Y]};
   }
+  const projectileDrop=shot=>shot.dropDistance>0?clamp((shot.travelled||0)/shot.dropDistance,0,1):1;
   function projectileHeight(shot){
     if(shot.visual!=='obsidian')return 0;
-    const q=shot.dropDistance>0?clamp((shot.travelled||0)/shot.dropDistance,0,1):1;
+    const q=projectileDrop(shot);
     return 44+((shot.launchHeight??44)-44)*(1-q)**2;
   }
-  function projectilePoint(shot){return[shot.x,shot.y-projectileHeight(shot)];}
+  function projectilePoint(shot){return[shot.x+(shot.visual==='obsidian'?(shot.launchOffsetX||0)*(1-projectileDrop(shot)):0),shot.y-projectileHeight(shot)];}
   function releaseBolt(S){
     const b=S.boss,c=BOSS_ATTACKS.bolt,g=boltGeometry(S),target=b.boltTarget||S.p,d=floorDistance(target.x-g.origin.x,target.y-g.origin.y);
+    // Give the head's forward screen offset time to join the floor lane;
+    // a close target must not pull the shard backwards through the jaw.
+    const cx=Math.cos(g.aim),headAdvance=Math.max(0,(g.muzzle[0]-g.origin.x)*Math.sign(cx))/Math.max(.2,Math.abs(cx));
     const shot={id:S.nextId++,owner:'boss',type:'ashBolt',visual:'obsidian',x:g.origin.x,y:g.origin.y,vx:Math.cos(g.aim)*c.speed,vy:Math.sin(g.aim)*c.speed*FLOOR_Y,r:c.radius,ttl:c.range/c.speed,age:0,damage:c.damage,guardCost:c.guardCost,
-      launchHeight:g.origin.y-g.muzzle[1],dropDistance:Math.max(60,Math.min(260,d*.65)),travelled:0,aim:g.aim};
+      launchHeight:g.origin.y-g.muzzle[1],launchOffsetX:g.muzzle[0]-g.origin.x,dropDistance:Math.max(60,Math.min(260,d*.65),headAdvance+12),travelled:0,aim:g.aim};
     S.shots.push(shot);emit(S,'boltRelease',shot.x,shot.y,{muzzle:g.muzzle,angle:g.aim,attackId:b.attackId,shotId:shot.id});
   }
   function bossHeight(S){
@@ -425,20 +428,20 @@
         if (b.hp>0 && bossVulnerable(S) && segmentDistance(b.x,b.y,oldX,oldY,shot.x,shot.y)<=b.r+shot.r) {
           const applied=damageBoss(S,shot.damage,{type:shot.type});
           if (shot.type==='frost'&&applied>0) {b.chilledUntil=S.t+1.4;emit(S,'frost',b.x,b.y);}
-          if(shot.visual==='obsidian')emit(S,'obsidianImpact',shot.x,shot.y,{height:projectileHeight(shot),kind:'return'});
+          if(shot.visual==='obsidian')emit(S,'obsidianImpact',shot.x,shot.y,{height:projectileHeight(shot),point:projectilePoint(shot),kind:'return'});
           shot.dead=true;
         }
       } else {
         const p=S.p;
-        if (p.hp>0 && projectileHeight(shot)<=100 && segmentDistance(p.x,p.y,oldX,oldY,shot.x,shot.y)<=p.r+shot.r) {
+        if (p.hp>0 && projectileHeight(shot)<=100 && (shot.visual!=='obsidian'||projectileDrop(shot)>=1) && segmentDistance(p.x,p.y,oldX,oldY,shot.x,shot.y)<=p.r+shot.r) {
           const result=applyHit(S,{id:'shot-'+shot.id,damage:shot.damage,sourceX:oldX,sourceY:oldY,guardCost:shot.guardCost,blockable:true,evadable:true,projectile:true});
           if (result.reflect) {
             shot.owner='player';shot.type='reflected';shot.vx*=-1;shot.vy*=-1;shot.damage=34;shot.x=p.x+Math.cos(p.facing)*42;shot.y=p.y+Math.sin(p.facing)*42;shot.ttl=3;
-            if(shot.visual==='obsidian'){const a=floorAim(S.boss.x-p.x,S.boss.y-p.y),v=BOSS_ATTACKS.bolt.speed*1.25;shot.vx=Math.cos(a)*v;shot.vy=Math.sin(a)*v*FLOOR_Y;shot.x=p.x+Math.cos(a)*42;shot.y=p.y+Math.sin(a)*42*FLOOR_Y;shot.launchHeight=44;shot.dropDistance=0;shot.travelled=0;}
-          } else {shot.dead=true;if(shot.visual==='obsidian')emit(S,'obsidianImpact',shot.x,shot.y,{height:projectileHeight(shot),kind:result.kind});}
+            if(shot.visual==='obsidian'){const a=floorAim(S.boss.x-p.x,S.boss.y-p.y),v=BOSS_ATTACKS.bolt.speed*1.25;shot.vx=Math.cos(a)*v;shot.vy=Math.sin(a)*v*FLOOR_Y;shot.x=p.x+Math.cos(a)*42;shot.y=p.y+Math.sin(a)*42*FLOOR_Y;shot.launchHeight=44;shot.launchOffsetX=0;shot.dropDistance=0;shot.travelled=0;}
+          } else {shot.dead=true;if(shot.visual==='obsidian')emit(S,'obsidianImpact',shot.x,shot.y,{height:projectileHeight(shot),point:projectilePoint(shot),kind:result.kind});}
         }
       }
-      if (!shot.dead && !isWalkable(S,shot.x,shot.y,shot.r,true)){shot.dead=true;if(shot.visual==='obsidian')emit(S,'obsidianImpact',oldX,oldY,{height:projectileHeight(shot),kind:'stone'});}
+      if (!shot.dead && !isWalkable(S,shot.x,shot.y,shot.r,true)){shot.dead=true;if(shot.visual==='obsidian')emit(S,'obsidianImpact',oldX,oldY,{height:projectileHeight(shot),point:projectilePoint({...shot,x:oldX,y:oldY}),kind:'stone'});}
       if (shot.ttl<=0) shot.dead=true;
     }
     S.shots=S.shots.filter(x=>!x.dead);

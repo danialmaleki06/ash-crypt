@@ -46,16 +46,20 @@
   const b=s.boss,c=SIM.BOSS_ATTACKS[b.attack];if(!c||b.hp<=0||s.p.hp<=0)return;
   if(b.attack==='bolt'){
    if(b.state==='telegraph'){const g=SIM.boltGeometry(s),dx=g.end[0]-g.origin.x,dy=g.end[1]-g.origin.y,w=c.radius*2+16,wx=-Math.sin(g.aim)*w,wy=Math.cos(g.aim)*w*SIM.FLOOR_Y;
-    G.draw(F.lane,{u_t:s.t,u_progress:clamp(b.stateT/c.windup),u_locked:b.boltTarget?1:0,u_size:[Math.max(8,g.range),w]},[dx,dy,0,wx,wy,0,g.origin.x-wx/2,g.origin.y-wy/2,1]);}
+    const xf=[dx,dy,0,wx,wy,0,g.origin.x-wx/2,g.origin.y-wy/2,1];
+    G.draw(F.lane,{u_t:s.t,u_progress:clamp(b.stateT/c.windup),u_locked:b.boltTarget?1:0,u_size:[Math.max(8,g.range),w]},xf);
+    L.anchor('dragon-bolt-floor',[b.x,b.y],[xf[6]+xf[3]/2,xf[7]+xf[4]/2],1);}
    return;
   }
   if(b.state==='telegraph'||(b.attack==='slam'&&b.state==='active')){
    const circle=b.attack==='slam',r=circle?c.radius:c.range,progress=b.state==='active'?1:clamp(b.stateT/c.windup),col=circle?[.96,.25,.12,.84]:b.attack==='breath'?[1.,.39,.10,.80]:[.91,.67,.27,.83];
-   const origin=b.attack==='breath'?SIM.breathGeometry(s).origin:b;
-   G.draw(F.mark,{u_t:s.t,u_shape:[b.aim,c.arc||TAU,progress,circle?0:1],u_col:col,u_size:[r*2,r*2*SIM.FLOOR_Y]},G.xf(origin.x-r,origin.y-r*SIM.FLOOR_Y,r*2,r*2*SIM.FLOOR_Y));
+   const origin=b.attack==='breath'?SIM.breathGeometry(s).origin:b,xf=G.xf(origin.x-r,origin.y-r*SIM.FLOOR_Y,r*2,r*2*SIM.FLOOR_Y);
+   G.draw(F.mark,{u_t:s.t,u_shape:[b.aim,c.arc||TAU,progress,circle?0:1],u_col:col,u_size:[r*2,r*2*SIM.FLOOR_Y]},xf);
+   if(b.attack==='breath')L.anchor('dragon-breath-floor',[b.x,b.y],[xf[6]+xf[0]/2,xf[7]+xf[4]/2],1);
   }
   if(b.attack==='breath'&&b.state==='active'){
-   const r=c.range,origin=SIM.breathGeometry(s).origin;G.draw(F.mark,{u_t:s.t,u_shape:[b.aim,c.arc,1,1],u_col:[.93,.25,.055,.44],u_size:[r*2,r*2*SIM.FLOOR_Y]},G.xf(origin.x-r,origin.y-r*SIM.FLOOR_Y,r*2,r*2*SIM.FLOOR_Y));
+   const r=c.range,origin=SIM.breathGeometry(s).origin,xf=G.xf(origin.x-r,origin.y-r*SIM.FLOOR_Y,r*2,r*2*SIM.FLOOR_Y);G.draw(F.mark,{u_t:s.t,u_shape:[b.aim,c.arc,1,1],u_col:[.93,.25,.055,.44],u_size:[r*2,r*2*SIM.FLOOR_Y]},xf);
+   L.anchor('dragon-breath-floor',[b.x,b.y],[xf[6]+xf[0]/2,xf[7]+xf[4]/2],1);
   }
  };
  F.ground=s=>{
@@ -85,16 +89,17 @@
   const fade=Math.min(1,b.stateT/.12,(cfg.active-b.stateT)/.18);
   const lo=segment/count,hi=(segment+1)/count,from=geom.point(lo),to=geom.point(hi),dx=to[0]-from[0],dy=to[1]-from[1];
   const wx=-Math.sin(b.aim)*width,wy=Math.cos(b.aim)*width*SIM.FLOOR_Y;
-  G.draw(F.flame,{u_t:s.t,u_col:[1,1,1,.96],u_power:fade,u_span:[lo,hi]},[dx,dy,0,wx,wy,0,from[0]-wx/2,from[1]-wy/2,1]);
+  const xf=[dx,dy,0,wx,wy,0,from[0]-wx/2,from[1]-wy/2,1];
+  G.draw(F.flame,{u_t:s.t,u_col:[1,1,1,.96],u_power:fade,u_span:[lo,hi]},xf);
   if(segment===0)L.glow(mx,my,45,[1,.42,.08],.30*fade,4);
   for(let i=0;i<22;i++){const q=(s.t*.7+i/22)%1;if(q<lo||q>=hi)continue;const p=geom.point(q),spread=(h(i+33)-.5)*q*100,x=p[0]-Math.sin(b.aim)*spread,y=p[1]+Math.cos(b.aim)*spread*SIM.FLOOR_Y;L.solid(Math.round(x/2)*2,Math.round(y/2)*2,2+q*3,2+q*3,[1,.47+.25*h(i),.12],0,0,0,(1-q)*.60*fade);}
-  if(segment===0)L.anchor('dragon-breath-muzzle',[mx,my],DRAGON.muzzle(s),1);
+  if(segment===0)L.anchor('dragon-breath-muzzle',DRAGON.muzzle(s),[xf[6]+xf[3]/2,xf[7]+xf[4]/2],1);
  };
  F.events=(e,s)=>{
   const age=s.t-e.t;if(age<0)return;
   if(e.k==='clawSwing'&&age<.30){const r=e.range;G.draw(F.claw,{u_t:s.t,u_age:age,u_aim:e.angle},G.xf(e.x-r,e.y-r*SIM.FLOOR_Y-32,r*2,r*2*SIM.FLOOR_Y));}
   if(e.k==='boltRelease'&&age<.18){L.glow(e.muzzle[0],e.muzzle[1],50,[.56,.74,.88],.28*(1-age/.18),4);}
-  if(e.k==='obsidianImpact'&&age<.5){const x=e.x,y=e.y-(e.height||44),fade=1-age/.5;
+  if(e.k==='obsidianImpact'&&age<.5){const [x,y]=e.point||[e.x,e.y-(e.height||44)],fade=1-age/.5;
    if(age<.11)L.star(x,y,27*(1-age/.12),[.86,.91,.96],.85);
    for(let i=0;i<14;i++){const a=i*TAU/14,d=8+Math.sqrt(age)*85;L.solid(Math.round((x+Math.cos(a)*d)/2)*2,Math.round((y+Math.sin(a)*d*.65+age*age*100)/2)*2,3+h(i)*4,3+h(i+7)*3,i%3?[.39,.45,.48]:[.80,.84,.85],0,0,0,fade);}
   }
