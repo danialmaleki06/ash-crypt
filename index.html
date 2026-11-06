@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <link rel="icon" href="data:,">
+  <title>Пепельная крипта — играть</title>
+  <style>
+    @font-face{font-family:RunePixel;src:url('assets/fonts/PressStart2P-Regular.ttf') format('truetype');font-weight:400;font-style:normal;font-display:swap}
+    *{box-sizing:border-box}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#090b10;color:#ddd6ca;font:14px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+    body{height:100dvh;display:grid;grid-template-rows:minmax(0,1fr) auto}
+    #viewport{display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;overflow:hidden}
+    #stage{position:relative;width:100%;aspect-ratio:1672/941;max-width:100%;flex:none;background:#0c0d11}
+    #c{display:block;width:100%;height:100%;image-rendering:pixelated;touch-action:none;outline-offset:-3px}
+    #hint{margin:0;min-height:36px;padding:7px 12px;text-align:center;color:#aaa496;font-size:12px;line-height:1.65;user-select:none}
+    #hint kbd,.controls kbd{font:inherit;font-weight:650;color:#e9dfcb;white-space:nowrap}
+    button{font:10px/1.7 RunePixel,monospace;color:#e6d9bf;background:#242321;border:2px solid #7b6647;border-radius:0;min-height:40px;padding:8px 17px;cursor:pointer;box-shadow:inset 0 2px #a18c5b33,inset 0 -3px #06070a}
+    button:hover{background:#353029}button:focus-visible{outline:2px solid #dfb970;outline-offset:3px}
+    #pause-button{position:absolute;right:12px;top:12px;min-height:32px;padding:4px 10px;font-size:12px;background:#141619c9;border-color:#70614992}
+    .overlay{position:absolute;inset:0;background:#05070bd9;display:grid;place-items:center;padding:18px;z-index:4}
+    .overlay[hidden]{display:none}
+    .dialog{width:min(600px,100%);text-align:center;background:repeating-linear-gradient(135deg,#16181e,#16181e 4px,#181a20 4px,#181a20 8px);border:3px double #79664b;padding:30px 26px;box-shadow:0 8px 0 #050609,inset 0 0 0 5px #0b0e13}
+    h1{font:400 16px/1.8 RunePixel,monospace;color:#e7d5ad;margin:0 0 20px;overflow-wrap:anywhere}p{margin:0 0 16px}
+    .controls{display:grid;grid-template-columns:1fr 1fr;gap:10px 18px;margin:0 0 24px;text-align:left;color:#bdb7ab}
+    .controls span{display:flex;justify-content:space-between;gap:10px}.actions{display:flex;justify-content:center;gap:10px;flex-wrap:wrap}
+    #status{position:absolute;inset:0;display:grid;place-items:center;background:#0c0e13;z-index:8;padding:20px;text-align:center}
+    #status[hidden]{display:none}#status.error{color:#f3b5a9;white-space:pre-wrap;overflow:auto}
+    .qa #hint,.qa #pause-button,.qa .overlay{display:none!important}
+    @media(max-width:480px){#hint{font-size:11px;padding:6px 8px}#pause-button{right:7px;top:7px;font-size:9px}.dialog{padding:18px 15px}h1{font-size:12px}.controls{font-size:12px;gap:8px 14px}}
+  </style>
+</head>
+<body>
+  <main id="viewport" aria-label="Игровая сцена">
+    <div id="stage">
+      <canvas id="c" width="1672" height="941" tabindex="0" aria-label="Мрачная изометрическая арена. WASD — движение, мышь — прицел, ЛКМ — удар, ПКМ — щит, Space — перекат, Q E R — способности."></canvas>
+      <button id="pause-button" type="button" aria-label="Приостановить игру">Пауза · Esc</button>
+      <section id="pause-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="pause-title" hidden>
+        <div class="dialog">
+          <h1 id="pause-title">Пауза</h1>
+          <p>Во время взлёта выйди из поля. Обегай огненное дыхание. E — тяжёлый критический удар.</p>
+          <div class="controls">
+            <span><kbd>WASD</kbd>Движение</span><span><kbd>Мышь</kbd>Прицел</span>
+            <span><kbd>ЛКМ</kbd>Удар</span><span><kbd>ПКМ</kbd>Щит</span>
+            <span><kbd>Space</kbd>Перекат</span><span><kbd>Q · E · R</kbd>Способности</span>
+          </div>
+          <div class="actions"><button id="resume-button" type="button">Продолжить</button><button id="restart-button" type="button">Начать заново</button></div>
+        </div>
+      </section>
+      <section id="outcome-overlay" class="overlay" role="dialog" aria-modal="true" aria-labelledby="outcome-title" hidden>
+        <div class="dialog"><h1 id="outcome-title">Бой завершён</h1><p id="outcome-copy">Нажми Enter, чтобы повторить.</p><button id="retry-button" type="button">Повторить бой · Enter</button></div>
+      </section>
+      <div id="status" role="status" aria-live="polite">Подготовка сцены…</div>
+    </div>
+  </main>
+  <p id="hint"><kbd>WASD</kbd> движение &nbsp;·&nbsp; <kbd>Мышь</kbd> прицел &nbsp;·&nbsp; <kbd>ЛКМ</kbd> удар &nbsp;·&nbsp; <kbd>ПКМ</kbd> щит &nbsp;·&nbsp; <kbd>Space</kbd> перекат &nbsp;·&nbsp; <kbd>Q</kbd> лёд &nbsp;·&nbsp; <kbd>E</kbd> крит &nbsp;·&nbsp; <kbd>R</kbd> барьер</p>
+  <script>window.__STATIC__ = 1;</script>
+  <script src="input.js"></script>
+</body>
+</html>

@@ -1,0 +1,1 @@
+window.SIZES={"arena": [1672, 941], "fg_left_statue": [183, 250], "fg_right_column": [171, 233], "fg_front_left": [841, 290], "fg_front_right": [562, 314], "hud_frame": [650, 141], "boss_frame": [678, 73]};
